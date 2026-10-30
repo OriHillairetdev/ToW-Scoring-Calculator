@@ -6,34 +6,46 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  StatusBar,
   Alert,
   Animated,
   Easing,
   BackHandler,
+  Platform,
+  type ScrollViewInstance,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
+import { useFonts } from 'expo-font';
+import { StatusBar } from 'expo-status-bar';
 
 // ---------------------------------------------------------------------------
-// Theme: Old World blue & gold
+// Theme: taken from the Old World logo: teal-blue banner, gold lettering with a
+// red-brown outline, and the parchment of the map behind it.
 // ---------------------------------------------------------------------------
 const C = {
-  bg: '#0A1730',
-  panel: '#12264A',
-  panel2: '#1B3668',
-  line: '#2F4E8E',
-  gold: '#D4AF37',
-  goldLight: '#F0D57A',
-  goldDark: '#8F6F18',
-  text: '#F4ECD3',
-  muted: '#9FB3D9',
-  danger: '#E0705C',
-  good: '#8EDDB0',
+  bg: '#E6D6AE', // parchment
+  panel: '#F3E8C8', // light parchment (cards)
+  panel2: '#D9C48E', // darker parchment
+  line: '#9A7B45', // brown ink
+  blue: '#14507C', // logo banner
+  blueDark: '#0A3556',
+  gold: '#E1A71B', // logo lettering
+  goldLight: '#F2C94C',
+  goldDark: '#7A4E0E',
+  red: '#A3301F', // logo outline
+  text: '#2A1B0C', // ink
+  muted: '#6A5434',
+  cream: '#F6EBCB',
+  onGold: '#2A1B0C',
+  danger: '#A3301F',
+  good: '#2E6B3C',
 };
+const SERIF = Platform.select({ ios: 'Georgia', default: 'serif' });
+// Logo lettering uses the bundled ITC Serif Gothic Std Heavy font.
+const LOGO_FONT = 'ITCSerifGothicHeavy';
 
 // ---------------------------------------------------------------------------
 // Official Victory Point rules (Warhammer: The Old World)
@@ -357,10 +369,11 @@ function outcome(
 function Splash({ onDone }: { onDone: () => void }) {
   // Keep the latest callback in a ref so parent re-renders never restart the animation.
   const doneRef = useRef(onDone);
-  doneRef.current = onDone;
+  useEffect(() => {
+    doneRef.current = onDone;
+  }, [onDone]);
 
   const ring = useMemo(() => new Animated.Value(0), []);
-  const spin = useMemo(() => new Animated.Value(0), []);
   const title = useMemo(() => new Animated.Value(0), []);
   const bar = useMemo(() => new Animated.Value(0), []);
   const sub = useMemo(() => new Animated.Value(0), []);
@@ -368,15 +381,7 @@ function Splash({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     const anim = Animated.sequence([
-      Animated.parallel([
-        Animated.spring(ring, { toValue: 1, friction: 5, tension: 55, useNativeDriver: true }),
-        Animated.timing(spin, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
+      Animated.spring(ring, { toValue: 1, friction: 5, tension: 55, useNativeDriver: true }),
       Animated.parallel([
         Animated.timing(title, { toValue: 1, duration: 700, useNativeDriver: true }),
         Animated.timing(bar, {
@@ -392,25 +397,19 @@ function Splash({ onDone }: { onDone: () => void }) {
     ]);
     anim.start(({ finished }) => finished && doneRef.current());
     return () => anim.stop();
-  }, [bar, out, ring, spin, sub, title]);
-
-  const rotA = spin.interpolate({ inputRange: [0, 1], outputRange: ['-180deg', '0deg'] });
-  const rotB = spin.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '45deg'] });
+  }, [bar, out, ring, sub, title]);
 
   return (
     <Pressable style={styles.fill} onPress={() => doneRef.current()}>
       <Animated.View style={[styles.splash, { opacity: out }]}>
-        <Animated.View
+        <Animated.Image
+          source={require('./assets/OldWorld Scoring.png')}
+          resizeMode="contain"
           style={[
             styles.crest,
             { opacity: ring, transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }] },
           ]}
-        >
-          <View style={styles.ring} />
-          <Animated.View style={[styles.square, { transform: [{ rotate: rotA }] }]} />
-          <Animated.View style={[styles.square, { transform: [{ rotate: rotB }] }]} />
-          <View style={styles.gem} />
-        </Animated.View>
+        />
 
         <Animated.Text
           style={[
@@ -446,8 +445,8 @@ function FadeIn({ children, style }: { children: React.ReactNode; style?: StyleP
 // ---------------------------------------------------------------------------
 function GoldButton({ label, onPress, style }: { label: string; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   return (
-    <Pressable style={[styles.goldBtn, style]} onPress={onPress}>
-      <Text style={styles.goldBtnText}>{label}</Text>
+    <Pressable style={({ pressed }) => [styles.goldBtn, pressed && styles.goldBtnPressed, style]} onPress={onPress}>
+      {({ pressed }) => <Text style={[styles.goldBtnText, pressed && styles.goldBtnTextPressed]}>{label}</Text>}
     </Pressable>
   );
 }
@@ -464,7 +463,10 @@ function OutlineButton({
   small?: boolean;
 }) {
   return (
-    <Pressable style={[styles.outBtn, small && styles.outBtnSmall, style]} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [styles.outBtn, small && styles.outBtnSmall, pressed && styles.outBtnPressed, style]}
+      onPress={onPress}
+    >
       <Text style={[styles.outBtnText, small && { fontSize: 13 }]}>{label}</Text>
     </Pressable>
   );
@@ -597,7 +599,7 @@ function UnitRow({
         <Tag label="General" on={unit.isGeneral} onPress={() => onChange({ isGeneral: !unit.isGeneral })} />
         <Tag label="BSB" on={unit.isBSB} onPress={() => onChange({ isBSB: !unit.isBSB })} />
         <Tag
-          label={`Standard claimed +${STANDARD_VP}`}
+          label={`Standard +${STANDARD_VP}`}
           on={unit.standard}
           onPress={() => onChange({ standard: !unit.standard })}
         />
@@ -610,11 +612,11 @@ function UnitRow({
 function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <View style={styles.row}>
-      <View style={{ flex: 1, paddingRight: 8 }}>
+      <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
         {!!hint && <Text style={styles.rowHint}>{hint}</Text>}
       </View>
-      {children}
+      <View style={styles.rowControl}>{children}</View>
     </View>
   );
 }
@@ -637,50 +639,51 @@ function ScoreCard({
   const a = sheet.auto;
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>{nameOf(side)} scored</Text>
+      <Text style={styles.cardTitle}>{nameOf(side)}</Text>
       <Text style={styles.cardSub}>
-        {a ? `Calculated from ${enemyName}'s army` : `Enter what you took from ${enemyName}`}
+        {a ? `Worked out from ${enemyName}'s army` : `Enter what you took from ${enemyName}`}
       </Text>
 
-      <Row label="Enemy units destroyed (VP)" hint={a ? undefined : 'Total VP of units killed, fled or fleeing'}>
+      <Text style={styles.sectionLabel}>Kills</Text>
+      <Row label="Units destroyed" hint={a ? 'Full points dead or fled, half if fleeing or at 25%' : 'VP of units killed, fled or fleeing'}>
         {a ? <Text style={styles.rowValue}>{sheet.kills}</Text> : <NumInput value={man.kills} onChange={(v) => setManual(side, { kills: v })} />}
       </Row>
 
-      <Row label="Enemy standards claimed" hint={`${STANDARD_VP} VP each`}>
+      <Text style={styles.sectionLabel}>Bonuses</Text>
+      <Row label="Standards claimed" hint={`${STANDARD_VP} VP each`}>
         {a ? (
           <Text style={styles.rowValue}>
-            {sheet.standards} → {sheet.standardsVP}
+            {sheet.standards} = {sheet.standardsVP}
           </Text>
         ) : (
           <View style={styles.inline}>
             <NumInput value={man.standards} onChange={(v) => setManual(side, { standards: v })} />
-            <Text style={styles.calc}>→ {sheet.standardsVP}</Text>
+            <Text style={styles.calc}>= {sheet.standardsVP}</Text>
           </View>
         )}
       </Row>
 
-      <Row label="Enemy General slain / fled / fleeing" hint={`+${GENERAL_VP} VP`}>
+      <Row label="Enemy General" hint={`+${GENERAL_VP} VP if slain, fled or fleeing`}>
         {a ? (
-          <Text style={styles.rowValue}>{sheet.general ? `+${GENERAL_VP}` : '—'}</Text>
+          <Text style={styles.rowValue}>{sheet.general ? `+${GENERAL_VP}` : '–'}</Text>
         ) : (
           <Tag label="Yes" on={man.general} onPress={() => setManual(side, { general: !man.general })} />
         )}
       </Row>
 
-      <Row label="Enemy Battle Standard Bearer slain / fled / fleeing" hint={`+${BSB_VP} VP`}>
+      <Row label="Enemy Battle Standard Bearer" hint={`+${BSB_VP} VP if slain, fled or fleeing`}>
         {a ? (
-          <Text style={styles.rowValue}>{sheet.bsb ? `+${BSB_VP}` : '—'}</Text>
+          <Text style={styles.rowValue}>{sheet.bsb ? `+${BSB_VP}` : '–'}</Text>
         ) : (
           <Tag label="Yes" on={man.bsb} onPress={() => setManual(side, { bsb: !man.bsb })} />
         )}
       </Row>
 
-      <View style={styles.divider} />
-
-      <Row label="Scenario score" hint="Objectives, free entry">
+      <Text style={styles.sectionLabel}>Missions</Text>
+      <Row label="Scenario" hint="Objectives held">
         <NumInput value={man.scenario} onChange={(v) => setManual(side, { scenario: v })} />
       </Row>
-      <Row label="Secondary mission score" hint="Free entry">
+      <Row label="Secondary mission" hint="Your own tally">
         <NumInput value={man.secondary} onChange={(v) => setManual(side, { secondary: v })} />
       </Row>
 
@@ -728,14 +731,14 @@ function VPTable({ sizeIdx }: { sizeIdx: number }) {
 
 function RulesTab({ sizeIdx, scoring }: { sizeIdx: number; scoring: Scoring }) {
   const matched = scoring === 'matched';
-  const items = [
-    ['Destroyed or fled off the battlefield', "100% of the unit's points cost"],
-    ['Fleeing when the game ends', '50% of points cost, rounded up'],
-    ['Reduced to 25% of starting Unit Strength or less (or 25% of Wounds where Unit Strength equals Wounds)', '50% of points cost, rounded up'],
-    ['Enemy General slain, fled off or fleeing at the end', `+${GENERAL_VP} VP`],
-    ['Each enemy standard claimed as a trophy', `+${STANDARD_VP} VP`],
-    ['Enemy Battle Standard Bearer slain, fled off or fleeing at the end', `+${BSB_VP} VP`],
-    ['Scenario objectives and secondary missions', 'Entered manually in the Scores tab'],
+  const items: [string, string][] = [
+    ['Dead or fled off the table', '100% of points'],
+    ['Fleeing when the game ends', '50% of points'],
+    ['At 25% strength or less', '50% of points'],
+    ['Enemy General slain, fled or fleeing', `+${GENERAL_VP} VP`],
+    ['Each enemy standard claimed', `+${STANDARD_VP} VP`],
+    ['Enemy Battle Standard Bearer slain, fled or fleeing', `+${BSB_VP} VP`],
+    ['Scenario and secondary missions', 'Enter by hand'],
   ];
   return (
     <ScrollView contentContainerStyle={styles.pad}>
@@ -747,20 +750,23 @@ function RulesTab({ sizeIdx, scoring }: { sizeIdx: number; scoring: Scoring }) {
             <Text style={styles.ruleB}>{b}</Text>
           </View>
         ))}
+        <Text style={styles.ruleNote}>
+          Unit points are rounded up. Strength means Unit Strength, or Wounds where the two are the same.
+        </Text>
       </View>
       <View style={[styles.card, !matched && styles.cardActive]}>
-        <Text style={styles.cardTitle}>{`Core rulebook scoring${!matched ? ' (in use)' : ''}`}</Text>
-        <Text style={styles.ruleA}>
-          Score at least 100 VP more than your opponent to win. Score twice as many VP as your opponent for a crushing
-          victory. Any other result is a draw.
+        <Text style={styles.cardTitle}>{`Core rulebook${!matched ? ' · in use' : ''}`}</Text>
+        <Text style={styles.ruleBody}>
+          Win by scoring 100 VP or more over your opponent. Score twice their VP for a crushing victory. Anything else
+          is a draw.
         </Text>
       </View>
       <View style={[styles.card, matched && styles.cardActive]}>
-        <Text style={styles.cardTitle}>{`Matched play: Victory Points Table${matched ? ' (in use)' : ''}`}</Text>
+        <Text style={styles.cardTitle}>{`Matched play table${matched ? ' · in use' : ''}`}</Text>
         <Text style={styles.cardSub}>
           {matched
-            ? `The highlighted column is this game: ${SIZES[sizeIdx] ?? SIZES[DEFAULT_SIZE]} pts per side.`
-            : 'Used when Matched play scoring is selected.'}
+            ? `Your game is the shaded column: ${SIZES[sizeIdx] ?? SIZES[DEFAULT_SIZE]} pts per side.`
+            : 'Applies when Matched play scoring is selected.'}
         </Text>
         <VPTable sizeIdx={matched ? sizeIdx : -1} />
       </View>
@@ -773,6 +779,11 @@ function RulesTab({ sizeIdx, scoring }: { sizeIdx: number; scoring: Scoring }) {
 // App
 // ---------------------------------------------------------------------------
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    [LOGO_FONT]: require('./assets/fonts/ITC Serif Gothic Std Heavy.otf'),
+  });
+  // Hold on a blank banner-blue screen until the logo font is ready (or failed, then fall back).
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: C.blue }} />;
   return (
     <SafeAreaProvider>
       <Main />
@@ -792,7 +803,7 @@ function Main() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [tab, setTab] = useState<'army' | 'scores' | 'rules'>('army');
   const [armyView, setArmyView] = useState(0);
-  const armyScroll = useRef<ScrollView>(null);
+  const armyScroll = useRef<ScrollViewInstance>(null);
 
   // Load saved game + scoreboard
   useEffect(() => {
@@ -1110,7 +1121,7 @@ function Main() {
   if (screen === 'splash') {
     return (
       <View style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <StatusBar style="light" />
         <Splash onDone={() => setScreen('menu')} />
       </View>
     );
@@ -1119,12 +1130,14 @@ function Main() {
   if (screen === 'menu') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <StatusBar style="light" />
         <FadeIn style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.menu}>
-            <Text style={styles.menuTitle}>THE OLD WORLD</Text>
-            <View style={styles.menuBar} />
-            <Text style={styles.menuSub}>BATTLE SCORER</Text>
+            <View style={styles.banner}>
+              <Text style={styles.menuTitle}>THE OLD WORLD</Text>
+              <View style={styles.menuBar} />
+              <Text style={styles.menuSub}>BATTLE SCORER</Text>
+            </View>
 
             {inProgress && (
               <View style={styles.savedCard}>
@@ -1141,7 +1154,7 @@ function Main() {
               </View>
             )}
 
-            <GoldButton label="New game: two armies" onPress={() => openSetup('two')} style={{ marginTop: 18 }} />
+            <OutlineButton label="New game: two armies" onPress={() => openSetup('two')} style={{ marginTop: 18 }} />
             <OutlineButton
               label="New game: single army (just me)"
               onPress={() => openSetup('single')}
@@ -1156,6 +1169,7 @@ function Main() {
               Single army mode only needs your list. Enter what you took from your opponent by hand.
             </Text>
           </ScrollView>
+          <Text style={styles.credit}>Made by Orion Hillairet</Text>
         </FadeIn>
       </SafeAreaView>
     );
@@ -1167,7 +1181,7 @@ function Main() {
     const losses = history.filter((e) => e.result === 'loss').length;
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <StatusBar style="light" />
         <ScrollView contentContainerStyle={styles.pad}>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { marginBottom: 0 }]}>Scoreboard</Text>
@@ -1181,7 +1195,7 @@ function Main() {
           <View style={styles.recordRow}>
             {([
               ['Wins', wins, C.good],
-              ['Draws', draws, C.gold],
+              ['Draws', draws, C.goldDark],
               ['Losses', losses, C.danger],
             ] as [string, number, string][]).map(([label, n, col]) => (
               <View key={label} style={styles.recordCell}>
@@ -1199,7 +1213,7 @@ function Main() {
           )}
 
           {history.map((e) => {
-            const col = e.result === 'win' ? C.good : e.result === 'loss' ? C.danger : C.gold;
+            const col = e.result === 'win' ? C.good : e.result === 'loss' ? C.danger : C.goldDark;
             const badge = e.result === 'win' ? 'W' : e.result === 'loss' ? 'L' : 'D';
             return (
               <View key={e.id} style={[styles.entry, { borderLeftColor: col }]}>
@@ -1230,7 +1244,7 @@ function Main() {
   if (screen === 'setup') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <StatusBar style="light" />
         <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{mode === 'single' ? 'Single army' : 'Two armies'}</Text>
 
@@ -1324,7 +1338,7 @@ function Main() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <StatusBar style="light" />
 
       <View style={styles.topBar}>
         <Pressable onPress={() => setScreen('menu')} hitSlop={10}>
@@ -1358,12 +1372,11 @@ function Main() {
           </View>
           <ScrollView ref={armyScroll} contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
             <Text style={styles.hint}>
-              Tap a unit name to see its equipment. Mark what happened to {single ? 'your' : `${nameOf(view)}'s`} units.
-              VP go to {nameOf(1 - view)}.
+              Tap a name for its equipment. Points go to {nameOf(1 - view)}.
             </Text>
             {(!hasGeneral || !hasBSB) && (
               <Text style={styles.warn}>
-                Tip: tap General{!hasBSB ? ' / BSB' : ''} on the right unit so the bonus VP count.
+                Not marked: {[!hasGeneral && 'General', !hasBSB && 'BSB'].filter(Boolean).join(' and ')}. Tap its tag on a unit so the bonus counts.
               </Text>
             )}
             {army.map((u) => (
@@ -1452,150 +1465,205 @@ const styles = StyleSheet.create({
   pad: { padding: 16, paddingBottom: 32 },
 
   // splash
-  splash: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg },
+  splash: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2196F3' },
   crest: { width: 150, height: 150, alignItems: 'center', justifyContent: 'center', marginBottom: 34 },
-  ring: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 3,
-    borderColor: C.gold,
-    backgroundColor: C.panel,
+  splashTitle: {
+    color: C.gold,
+    fontFamily: LOGO_FONT,
+    fontSize: 30,
+    letterSpacing: 5,
+    textShadowColor: C.red,
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 0,
   },
-  square: {
-    position: 'absolute',
-    width: 82,
-    height: 82,
-    borderWidth: 3,
-    borderColor: C.goldLight,
-    backgroundColor: 'rgba(212,175,55,0.12)',
-  },
-  gem: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.gold },
-  splashTitle: { color: C.gold, fontSize: 30, fontWeight: '800', letterSpacing: 7 },
   goldBar: { width: 230, height: 3, backgroundColor: C.gold, marginVertical: 14 },
-  splashSub: { color: C.text, fontSize: 14, letterSpacing: 9 },
+  splashSub: { color: C.cream, fontFamily: SERIF, fontSize: 14, letterSpacing: 8 },
 
   // menu
   menu: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  menuTitle: { color: C.gold, fontSize: 30, fontWeight: '800', letterSpacing: 6, textAlign: 'center' },
-  menuBar: { alignSelf: 'center', width: 200, height: 3, backgroundColor: C.gold, marginVertical: 12 },
-  menuSub: { color: C.text, textAlign: 'center', letterSpacing: 8, fontSize: 13, marginBottom: 26 },
+  banner: {
+    backgroundColor: C.blue,
+    borderTopWidth: 3,
+    borderBottomWidth: 3,
+    borderColor: C.goldDark,
+    paddingVertical: 22,
+    marginHorizontal: -24,
+    marginBottom: 28,
+    alignItems: 'center',
+  },
+  menuTitle: {
+    color: C.gold,
+    fontFamily: LOGO_FONT,
+    fontSize: 30,
+    letterSpacing: 4,
+    textAlign: 'center',
+    textShadowColor: C.red,
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 0,
+  },
+  menuBar: { width: 200, height: 2, backgroundColor: C.gold, marginVertical: 10 },
+  menuSub: { color: C.cream, textAlign: 'center', letterSpacing: 7, fontSize: 13, fontFamily: SERIF },
+  credit: { color: C.muted, fontSize: 11, textAlign: 'center', letterSpacing: 1, paddingVertical: 10 },
   menuHint: { color: C.muted, textAlign: 'center', marginTop: 16, fontSize: 13 },
-  savedCard: { backgroundColor: C.panel, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.goldDark },
-  savedLabel: { color: C.gold, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 },
-  savedNames: { color: C.text, fontSize: 17, fontWeight: '700', marginTop: 4 },
+  savedCard: {
+    backgroundColor: C.panel,
+    borderRadius: 4,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderLeftWidth: 6,
+    borderLeftColor: C.blue,
+  },
+  savedLabel: { color: C.red, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2, fontWeight: '700' },
+  savedNames: { color: C.text, fontFamily: SERIF, fontSize: 17, fontWeight: '700', marginTop: 4 },
 
   // buttons
-  goldBtn: { backgroundColor: C.gold, borderRadius: 10, padding: 15, alignItems: 'center' },
-  goldBtnText: { color: C.bg, fontWeight: '800', fontSize: 16 },
-  outBtn: { borderWidth: 1.5, borderColor: C.gold, borderRadius: 10, padding: 14, alignItems: 'center' },
+  goldBtn: { backgroundColor: C.blue, borderRadius: 3, padding: 15, alignItems: 'center', borderWidth: 2, borderColor: C.blueDark },
+  goldBtnPressed: { backgroundColor: C.gold, borderColor: C.goldDark },
+  goldBtnTextPressed: { color: C.onGold },
+  goldBtnText: { color: C.cream, fontFamily: SERIF, fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
+  outBtn: { borderWidth: 2, borderColor: C.blueDark, borderRadius: 3, padding: 14, alignItems: 'center' },
   outBtnSmall: { padding: 9 },
-  outBtnText: { color: C.gold, fontWeight: '700', fontSize: 15 },
+  outBtnPressed: { backgroundColor: C.panel2 },
+  outBtnText: { color: C.blueDark, fontFamily: SERIF, fontWeight: '700', fontSize: 15 },
   btnRow: { flexDirection: 'row', gap: 10, marginVertical: 8 },
 
   // setup / forms
-  title: { color: C.gold, fontSize: 26, fontWeight: '800', marginBottom: 12 },
-  card: { backgroundColor: C.panel, borderRadius: 12, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: C.line },
-  label: { color: C.muted, fontSize: 12, marginTop: 6, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 },
-  input: { backgroundColor: C.bg, color: C.text, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, borderWidth: 1, borderColor: C.line },
+  title: { color: C.blueDark, fontFamily: SERIF, fontSize: 26, fontWeight: '900', marginBottom: 12 },
+  card: {
+    backgroundColor: C.panel,
+    borderRadius: 4,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: C.line,
+    borderTopWidth: 5,
+    borderTopColor: C.blue,
+  },
+  label: { color: C.muted, fontSize: 12, marginTop: 6, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700' },
+  input: { backgroundColor: C.bg, color: C.text, borderRadius: 3, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, borderWidth: 1.5, borderColor: C.line },
   listInput: { height: 160 },
   hint: { color: C.muted, fontSize: 13, marginBottom: 8 },
-  warn: { color: C.goldLight, fontSize: 13, marginBottom: 10 },
+  warn: { color: C.red, fontSize: 13, marginBottom: 10, fontWeight: '600' },
 
   // game size picker
   sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  sizeChip: { borderWidth: 1, borderColor: C.line, borderRadius: 16, paddingHorizontal: 13, paddingVertical: 8 },
-  sizeChipOn: { backgroundColor: C.gold, borderColor: C.gold },
+  sizeChip: { borderWidth: 1.5, borderColor: C.line, borderRadius: 3, paddingHorizontal: 13, paddingVertical: 8 },
+  sizeChipOn: { backgroundColor: C.blue, borderColor: C.blueDark },
   sizeText: { color: C.muted, fontSize: 13, fontWeight: '700' },
-  sizeTextOn: { color: C.bg },
-  cardActive: { borderColor: C.gold },
+  sizeTextOn: { color: C.cream },
+  cardActive: { borderColor: C.gold, borderWidth: 2.5 },
 
   // game chrome
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10 },
-  topTitle: { color: C.gold, fontWeight: '800', letterSpacing: 4, fontSize: 14 },
-  topMenu: { color: C.goldLight, fontWeight: '700' },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: C.blue,
+    borderBottomWidth: 3,
+    borderBottomColor: C.goldDark,
+  },
+  topTitle: { color: C.gold, fontFamily: LOGO_FONT, letterSpacing: 3, fontSize: 14 },
+  topMenu: { color: C.cream, fontWeight: '700' },
+  topSaved: { color: '#BBD3E4', fontSize: 12 },
   scoreboard: { flexDirection: 'row', padding: 12, gap: 10 },
-  scoreCell: { flex: 1, backgroundColor: C.panel, borderRadius: 12, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: C.line },
-  scoreLead: { borderColor: C.gold, borderWidth: 2 },
-  scoreName: { color: C.muted, fontSize: 13 },
-  scoreNum: { color: C.goldLight, fontSize: 36, fontWeight: '800' },
+  scoreCell: { flex: 1, backgroundColor: C.panel, borderRadius: 4, padding: 10, alignItems: 'center', borderWidth: 1.5, borderColor: C.line },
+  scoreLead: { borderColor: C.gold, borderWidth: 3 },
+  scoreName: { color: C.muted, fontSize: 13, fontWeight: '600' },
+  scoreNum: { color: C.blueDark, fontFamily: SERIF, fontSize: 36, fontWeight: '900' },
   tabs: { flexDirection: 'row', paddingHorizontal: 12, gap: 8 },
-  tab: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: C.panel, alignItems: 'center', borderWidth: 1, borderColor: C.line },
-  tabOn: { backgroundColor: C.gold, borderColor: C.gold },
-  tabText: { color: C.muted, fontWeight: '600' },
-  tabTextOn: { color: C.bg },
-  actionBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.bg },
-  bottomBar: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.panel },
+  tab: { flex: 1, padding: 10, borderRadius: 3, backgroundColor: C.panel, alignItems: 'center', borderWidth: 1.5, borderColor: C.line },
+  tabOn: { backgroundColor: C.blue, borderColor: C.blueDark },
+  tabText: { color: C.muted, fontWeight: '700' },
+  tabTextOn: { color: C.cream },
+  actionBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1.5, borderTopColor: C.line, backgroundColor: C.bg },
+  bottomBar: { flexDirection: 'row', backgroundColor: C.blue, borderTopWidth: 3, borderTopColor: C.goldDark },
   bottomBtn: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  bottomText: { color: C.muted, fontWeight: '700', fontSize: 15 },
+  bottomText: { color: '#BBD3E4', fontFamily: SERIF, fontWeight: '700', fontSize: 15 },
   bottomTextOn: { color: C.gold },
-  bottomDot: { width: 18, height: 3, backgroundColor: C.gold, marginTop: 4, borderRadius: 2 },
+  bottomDot: { width: 18, height: 3, backgroundColor: C.gold, marginTop: 4 },
 
   // units
-  unit: { backgroundColor: C.panel, borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: C.line },
-  unitDead: { borderLeftWidth: 4, borderLeftColor: '#B83A2E', opacity: 0.85 },
+  unit: { backgroundColor: C.panel, borderRadius: 4, padding: 12, marginBottom: 10, borderWidth: 1.5, borderColor: C.line },
+  unitDead: { borderLeftWidth: 6, borderLeftColor: C.red, opacity: 0.85 },
   unitTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  unitName: { color: C.text, fontSize: 16, fontWeight: '700' },
-  pointsInput: { width: 64, backgroundColor: C.bg, color: C.goldLight, textAlign: 'center', borderRadius: 6, paddingVertical: 4, fontSize: 16, borderWidth: 1, borderColor: C.line },
+  unitName: { color: C.text, fontFamily: SERIF, fontSize: 16, fontWeight: '700' },
+  pointsInput: { width: 64, backgroundColor: C.bg, color: C.blueDark, textAlign: 'center', borderRadius: 3, paddingVertical: 4, fontSize: 16, fontWeight: '700', borderWidth: 1.5, borderColor: C.line },
   delete: { color: C.muted, fontSize: 18, paddingHorizontal: 4 },
   segment: { flexDirection: 'row', gap: 6, marginTop: 10 },
-  segBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: C.line, alignItems: 'center' },
+  segBtn: { flex: 1, paddingVertical: 8, borderRadius: 3, borderWidth: 1.5, borderColor: C.line, alignItems: 'center' },
   segText: { color: C.muted, fontSize: 12, fontWeight: '700' },
   segTextOn: { color: '#fff' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 10 },
-  tag: { borderWidth: 1, borderColor: C.line, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 6 },
-  tagOn: { backgroundColor: C.gold, borderColor: C.gold },
+  tag: { borderWidth: 1.5, borderColor: C.line, borderRadius: 3, paddingHorizontal: 11, paddingVertical: 6 },
+  tagOn: { backgroundColor: C.gold, borderColor: C.goldDark },
   tagText: { color: C.muted, fontSize: 12, fontWeight: '700' },
-  tagTextOn: { color: C.bg },
+  tagTextOn: { color: C.onGold },
   vp: { marginLeft: 'auto', color: C.good, fontWeight: '800', fontSize: 16 },
 
   // score cards
-  resultCard: { backgroundColor: C.panel2, borderRadius: 12, padding: 16, marginBottom: 14, alignItems: 'center', borderWidth: 1.5, borderColor: C.gold },
-  resultTitle: { color: C.goldLight, fontSize: 20, fontWeight: '800', textAlign: 'center' },
-  resultSub: { color: C.text, marginTop: 4 },
-  cardTitle: { color: C.gold, fontSize: 18, fontWeight: '800' },
-  cardSub: { color: C.muted, fontSize: 12, marginBottom: 8 },
+  resultCard: { backgroundColor: C.blue, borderRadius: 4, padding: 16, marginBottom: 14, alignItems: 'center', borderWidth: 2, borderColor: C.goldDark },
+  resultTitle: { color: C.gold, fontFamily: SERIF, fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  resultSub: { color: C.cream, marginTop: 4, textAlign: 'center' },
+  cardTitle: { color: C.blueDark, fontFamily: SERIF, fontSize: 18, fontWeight: '900' },
+  cardSub: { color: C.muted, fontSize: 12, marginBottom: 6 },
+  sectionLabel: {
+    color: C.red,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginTop: 12,
+    marginBottom: 2,
+    paddingBottom: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: C.line,
+  },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },
-  rowLabel: { color: C.text, fontSize: 14, fontWeight: '600' },
-  rowHint: { color: C.muted, fontSize: 11, marginTop: 1 },
-  rowValue: { color: C.goldLight, fontSize: 16, fontWeight: '800' },
+  rowText: { flex: 1, flexShrink: 1, paddingRight: 10 },
+  rowControl: { flexShrink: 0, alignItems: 'flex-end', justifyContent: 'center' },
+  rowLabel: { color: C.text, fontSize: 15, fontWeight: '700' },
+  rowHint: { color: C.muted, fontSize: 12, marginTop: 2 },
+  rowValue: { color: C.blueDark, fontSize: 17, fontWeight: '800' },
   inline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  calc: { color: C.goldLight, fontWeight: '700' },
-  numInput: { width: 78, backgroundColor: C.bg, color: C.goldLight, textAlign: 'center', borderRadius: 6, paddingVertical: 6, fontSize: 16, borderWidth: 1, borderColor: C.line },
+  calc: { color: C.blueDark, fontWeight: '700' },
+  numInput: { width: 78, backgroundColor: C.bg, color: C.blueDark, textAlign: 'center', borderRadius: 3, paddingVertical: 6, fontSize: 16, fontWeight: '700', borderWidth: 1.5, borderColor: C.line },
   divider: { height: 1, backgroundColor: C.line, marginVertical: 6 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 10, borderTopWidth: 1.5, borderTopColor: C.gold },
-  totalLabel: { color: C.text, fontSize: 16, fontWeight: '700' },
-  totalNum: { color: C.goldLight, fontSize: 30, fontWeight: '800' },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 3, borderTopColor: C.gold },
+  totalLabel: { color: C.text, fontFamily: SERIF, fontSize: 16, fontWeight: '800' },
+  totalNum: { color: C.blueDark, fontFamily: SERIF, fontSize: 30, fontWeight: '900' },
 
   // name pills / equipment
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  pill: { backgroundColor: C.gold, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 3 },
-  pillText: { color: C.bg, fontSize: 11, fontWeight: '800' },
-  equip: { marginTop: 10, padding: 10, backgroundColor: C.bg, borderRadius: 8, borderWidth: 1, borderColor: C.line },
+  pill: { backgroundColor: C.gold, borderRadius: 3, paddingHorizontal: 9, paddingVertical: 3, borderWidth: 1, borderColor: C.goldDark },
+  pillText: { color: C.onGold, fontSize: 11, fontWeight: '800' },
+  equip: { marginTop: 10, padding: 10, backgroundColor: C.bg, borderRadius: 3, borderWidth: 1.5, borderColor: C.line },
   equipItem: { color: C.text, fontSize: 13, marginBottom: 2 },
   equipNone: { color: C.muted, fontSize: 13 },
-  preview: { color: C.goldLight, fontSize: 13, marginTop: 8 },
-  topSaved: { color: C.muted, fontSize: 12 },
+  preview: { color: C.blueDark, fontSize: 13, marginTop: 8, fontWeight: '600' },
 
   // scoreboard
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  clearBtn: { borderWidth: 1.5, borderColor: C.danger, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 },
-  clearText: { color: C.danger, fontWeight: '700', fontSize: 13 },
+  clearBtn: { borderWidth: 2, borderColor: C.danger, borderRadius: 3, paddingHorizontal: 12, paddingVertical: 7 },
+  clearText: { color: C.danger, fontWeight: '800', fontSize: 13 },
   recordRow: { flexDirection: 'row', gap: 10, marginBottom: 6 },
-  recordCell: { flex: 1, backgroundColor: C.panel, borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: C.line },
-  recordNum: { fontSize: 32, fontWeight: '800' },
-  recordLabel: { color: C.muted, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  entry: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.panel, borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: C.line, borderLeftWidth: 4 },
-  badge: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { color: C.bg, fontWeight: '800', fontSize: 16 },
+  recordCell: { flex: 1, backgroundColor: C.panel, borderRadius: 4, paddingVertical: 12, alignItems: 'center', borderWidth: 1.5, borderColor: C.line },
+  recordNum: { fontFamily: SERIF, fontSize: 32, fontWeight: '900' },
+  recordLabel: { color: C.muted, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700' },
+  entry: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.panel, borderRadius: 4, padding: 12, marginBottom: 10, borderWidth: 1.5, borderColor: C.line, borderLeftWidth: 6 },
+  badge: { width: 34, height: 34, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { color: C.cream, fontFamily: SERIF, fontWeight: '900', fontSize: 16 },
   entryScore: { color: C.text, fontSize: 15, fontWeight: '700' },
   entrySub: { color: C.muted, fontSize: 12, marginTop: 2 },
 
   // rules
-  ruleRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.line },
-  ruleA: { color: C.text, fontSize: 14 },
-  ruleB: { color: C.goldLight, fontSize: 14, fontWeight: '700', marginTop: 2 },
+  ruleRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
+  ruleA: { flex: 1, color: C.text, fontSize: 14, paddingRight: 10 },
+  ruleB: { width: 104, textAlign: 'right', color: C.blueDark, fontSize: 14, fontWeight: '800' },
+  ruleBody: { color: C.text, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  ruleNote: { color: C.muted, fontSize: 12, marginTop: 10, lineHeight: 17 },
 
   // victory points table
   vpRow: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: C.line },
@@ -1604,8 +1672,8 @@ const styles = StyleSheet.create({
   vpCell: { flex: 1, alignItems: 'center', paddingVertical: 8 },
   vpCellOn: { backgroundColor: C.panel2 },
   vpHeadText: { color: C.muted, fontSize: 10, textAlign: 'center' },
-  vpHeadOn: { color: C.gold, fontWeight: '800' },
+  vpHeadOn: { color: C.blueDark, fontWeight: '800' },
   vpCode: { color: C.text, fontSize: 13, fontWeight: '700' },
-  vpCodeCV: { color: C.goldLight },
+  vpCodeCV: { color: C.red, fontWeight: '900' },
   vpCodeD: { color: C.muted },
 });

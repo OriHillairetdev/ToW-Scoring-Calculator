@@ -4,7 +4,7 @@
     "slug": "ToW-Scoring-Calculator",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/OldWorld Scoring.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -13,20 +13,57 @@
       "package": "com.orihillairetdev.towscoringcalculator",
       "allowBackup": false,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#2196F3",
+        "foregroundImage": "./assets/OldWorld Scoring_foreground.png",
+        "backgroundImage": "./assets/OldWorld Scoring_background.png",
+        "monochromeImage": "./assets/OldWorld Scoring_monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/OldWorld Scoring.png"
     },
     "extra": {
       "eas": {
         "projectId": "3db2ce0a-42a4-405b-85ca-40c345ca4ab5"
       }
-    }
+    },
+    "plugins": [
+      "expo-status-bar",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/ITC Serif Gothic Std Heavy.otf"
+          ],
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "ITCSerifGothicHeavy",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/ITC Serif Gothic Std Heavy.otf",
+                    "weight": 900
+                  }
+                ]
+              }
+            ]
+          },
+          "ios": {
+            "fonts": [
+              "./assets/fonts/ITC Serif Gothic Std Heavy.otf"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2196F3",
+          "image": "./assets/OldWorld Scoring.png",
+          "imageWidth": 192
+        }
+      ]
+    ]
   }
 }
